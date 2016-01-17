@@ -382,7 +382,7 @@ void genExprNode(AST_NODE* exprNode) {
                     break;
                 case BINARY_OP_GE:
                     fprintf(fout, "cmp w%d, w%d\n", leftOp->place, rightOp->place);
-                    fprintf(fout, "cset w%d, gt\n", exprNode->place);
+                    fprintf(fout, "cset w%d, ge\n", exprNode->place);
                     break;
                 case BINARY_OP_LE:
                     fprintf(fout, "cmp w%d, w%d\n", leftOp->place, rightOp->place);
@@ -544,6 +544,7 @@ void genExprNode(AST_NODE* exprNode) {
             float operandValue = 0;
             genExprRelatedNode(operand);
             exprNode->dataType = FLOAT_TYPE;
+            if(exprNode->place == 0) exprNode->place = get_reg(FLOAT);
             switch(exprNode->semantic_value.exprSemanticValue.op.unaryOp) {
                 case UNARY_OP_POSITIVE:
 //                    exprNode->semantic_value.exprSemanticValue.constEvalValue.fValue = operandValue;
@@ -706,14 +707,14 @@ void genVariableValue(AST_NODE* idNode)
         AST_NODE *traverseDimList = idNode->child;
 
         genExprRelatedNode(traverseDimList);
-        if(idNode->place == 0) idNode->place = get_reg(CALLEE);
+        if(idNode->place == 0) {
+            idNode->place = get_reg(CALLER);
+        }
 
         int temp = get_reg(CALLER);
-        if(entry->nestingLevel == 0)
-            //            if(idNode->dataType == INT_TYPE)
+        if(entry->nestingLevel == 0) {
             fprintf(fout, "ldr x%d, =_g_%s\n", idNode->place, entry->name);
-        //            if(idNode->dataType == FLOAT_TYPE) fprintf(fout, "ldr s%d, =_g_%s\n", idNode->place-32, entry->name);
-        else {
+        }else {
             fprintf(fout, "add x%d, x29, #%d\n", idNode->place, entry->offset);
         }
         fprintf(fout, "ldr w%d, =4\n", temp);
@@ -761,14 +762,16 @@ void genFunctionCall(AST_NODE* functionCallNode)
     {
         fprintf(fout, "bl _read_int\n");
         fprintf(fout, "mov w%d, w0\n", functionCallNode->place);
-        recycle(functionCallNode);
+//        recycle(functionCallNode);
+// remove comment cause ERROR
         return;
     }
     if(strcmp(functionIDNode->semantic_value.identifierSemanticValue.identifierName, "fread") == 0)
     {
         fprintf(fout, "bl _read_float\n");
-        fprintf(fout, "mov w%d, w0\n", functionCallNode->place);
-        recycle(functionCallNode);
+        fprintf(fout, "fmov s%d, s0\n", functionCallNode->place-32);
+//        recycle(functionCallNode);
+// remove comment cause  ERROR
         return;
     }
     /* save registers TODO */
