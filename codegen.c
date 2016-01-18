@@ -41,6 +41,7 @@ int  get_offset(SymbolTableEntry*);
 void recycle(AST_NODE*);
 
 int ARoffset;
+int deepestARoffset;
 int reg_number;
 int nest_num = 0;
 int global_first = 1;
@@ -755,10 +756,10 @@ void genFunction(AST_NODE* declNode) {
     gen_head(funcName);
     gen_prologue(funcName);
     for(i=0; i<pcount; i++) {
-        fprintf(fout, "str w%d, [sp, #-%d]\n", i, i*4+4);
+        fprintf(fout, "str w%d, [x29, #-%d]\n", i, i*4+4);
     }
     genBlockNode(blockNode);
-    gen_epilogue(funcName, /*size*/172 );
+    gen_epilogue(funcName, /*size*/172 - entry->offset );
 }
 
 void genBlockNode(AST_NODE* blockNode) {

@@ -5,6 +5,7 @@
 #include "symbolTable.h"
 int g_anyErrorOccur = 0;
 extern int ARoffset;
+extern int deepestARoffset;
 
 DATA_TYPE getBiggerType(DATA_TYPE dataType1, DATA_TYPE dataType2);
 void processProgramNode(AST_NODE *programNode);
@@ -1165,6 +1166,7 @@ void checkReturnStmt(AST_NODE* returnNode)
 
 void processBlockNode(AST_NODE* blockNode)
 {
+    int offset_before = ARoffset;
     openScope();
 
     AST_NODE *traverseListNode = blockNode->child;
@@ -1175,6 +1177,8 @@ void processBlockNode(AST_NODE* blockNode)
     }
 
     closeScope();
+    if(ARoffset < deepestARoffset) deepestARoffset = ARoffset;
+    ARoffset = offset_before;
 }
 
 
@@ -1365,6 +1369,7 @@ void declareFunction(AST_NODE* declarationNode)
 
     openScope();
     ARoffset = 0;
+    deepestARoffset = 0;
 
     AST_NODE *parameterListNode = functionNameID->rightSibling;
     AST_NODE *traverseParameter = parameterListNode->child;
@@ -1436,6 +1441,7 @@ void declareFunction(AST_NODE* declarationNode)
             processGeneralNode(traverseListNode);
             traverseListNode = traverseListNode->rightSibling;
         }
+        functionNameID->semantic_value.identifierSemanticValue.symbolTableEntry->offset = (deepestARoffset < ARoffset) ?deepestARoffset :ARoffset ;
     }
 
     closeScope();
