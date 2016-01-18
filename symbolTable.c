@@ -64,6 +64,7 @@ void enterIntoHashTrain(int hashIndex, SymbolTableEntry* entry)
 
 void initializeSymbolTable()
 {
+    ARoffset = 0;
     symbolTable.currentLevel = 0;
     symbolTable.scopeDisplayElementCount = 10;
     symbolTable.scopeDisplay = (SymbolTableEntry**)malloc(symbolTable.scopeDisplayElementCount * sizeof(SymbolTableEntry*));
@@ -281,7 +282,7 @@ int declaredLocally(char* symbolName)
 void openScope()
 {
     ++symbolTable.currentLevel;
-    ARoffset = 0;
+//    ARoffset = 0;
     if(symbolTable.currentLevel == symbolTable.scopeDisplayElementCount)
     {
         SymbolTableEntry** oldScopeDisplay = symbolTable.scopeDisplay;

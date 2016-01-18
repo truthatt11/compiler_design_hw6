@@ -4,6 +4,7 @@
 #include "header.h"
 #include "symbolTable.h"
 int g_anyErrorOccur = 0;
+extern int ARoffset;
 
 DATA_TYPE getBiggerType(DATA_TYPE dataType1, DATA_TYPE dataType2);
 void processProgramNode(AST_NODE *programNode);
@@ -1357,11 +1358,13 @@ void declareFunction(AST_NODE* declarationNode)
     int enterFunctionNameToSymbolTable = 0;
     if(!errorOccur)
     {
+        functionNameID->semantic_value.identifierSemanticValue.symbolTableEntry =
         enterSymbol(functionNameID->semantic_value.identifierSemanticValue.identifierName, attribute);
         enterFunctionNameToSymbolTable = 1;
     }
 
     openScope();
+    ARoffset = 0;
 
     AST_NODE *parameterListNode = functionNameID->rightSibling;
     AST_NODE *traverseParameter = parameterListNode->child;

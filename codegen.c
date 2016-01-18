@@ -8,24 +8,24 @@
 extern FILE* fout;
 
 void codegen(AST_NODE*);
-void genGeneralNode(AST_NODE*);
-void genDeclarationNode(AST_NODE*);
-void genIdList(AST_NODE*);
-void genFunction(AST_NODE*);
-void genBlockNode(AST_NODE*);
-void genStmtNode(AST_NODE*);
-void genIfStmt(AST_NODE*);
-void genWhileStmt(AST_NODE*);
-void genForStmt(AST_NODE*);
+void genAssignmentStmt(AST_NODE*);
 void genAssignOrExpr(AST_NODE*);
+void genBlockNode(AST_NODE*);
+void genConstValueNode(AST_NODE*);
+void genDeclarationNode(AST_NODE*);
 void genExprRelatedNode(AST_NODE*);
 void genExprNode(AST_NODE*);
+void genForStmt(AST_NODE*);
+void genFunction(AST_NODE*);
 void genFunctionCall(AST_NODE*);
+void genGeneralNode(AST_NODE*);
+void genIdList(AST_NODE*);
+void genIfStmt(AST_NODE*);
 void genReturnStmt(AST_NODE*);
-void genConstValueNode(AST_NODE*);
-void genAssignmentStmt(AST_NODE*);
-void genWriteFunction(AST_NODE*);
+void genStmtNode(AST_NODE*);
 void genVariableValue(AST_NODE*);
+void genWhileStmt(AST_NODE*);
+void genWriteFunction(AST_NODE*);
 
 typedef enum REGISTER_TYPE{
     CALLER,
@@ -244,13 +244,15 @@ void genForStmt(AST_NODE* forNode) {
     
     fprintf(fout, "_forChkLabel_%d:\n", this_level);
     genGeneralNode(conditionExpression);
-    if(conditionExpression->dataType == INT_TYPE) {
-        fprintf(fout, "cmp w%d, #0\n", conditionExpression->place);
-    }else if(conditionExpression->dataType == FLOAT_TYPE) {
+//    printf("condiexpr.datatype = %d\n", conditionExpression->child->dataType);
+    if(conditionExpression->child->dataType == INT_TYPE) {
+        fprintf(fout, "cmp w%d, #0\n", conditionExpression->child->place);
+    }else if(conditionExpression->child->dataType == FLOAT_TYPE) {
         constant_count++;
-        fprintf(fout, "fcmp s%d, #0.00000\n", conditionExpression->place-32);
+        fprintf(fout, "fcmp s%d, #0.00000\n", conditionExpression->child->place-32);
         fprintf(fout, "vmrs APSR_nzcv, FPSCR\n");
     }
+    recycle(conditionExpression->child);
     fprintf(fout, "beq _forExitLabel_%d\n", this_level);
     fprintf(fout, "b _forBodyLabel_%d\n", this_level);
     
@@ -703,26 +705,42 @@ void genVariableValue(AST_NODE* idNode)
     }
     else if(idNode->semantic_value.identifierSemanticValue.kind == ARRAY_ID)
     {
-        int dimension = 0;
+        int dimension = 1;
+        int temp = get_reg(CALLER);
         AST_NODE *traverseDimList = idNode->child;
+        AST_NODE *dimCount = idNode->child;
+        SymbolTableEntry* entry = idNode->semantic_value.identifierSemanticValue.symbolTableEntry;
+        ArrayProperties* prop = &entry->attribute->attr.typeDescriptor->properties.arrayProperties;
+        if(idNode->place == 0) idNode->place = get_reg(CALLER);
 
         genExprRelatedNode(traverseDimList);
-        if(idNode->place == 0) {
-            idNode->place = get_reg(CALLER);
-        }
+        traverseDimList = traverseDimList->rightSibling;
+        while(traverseDimList != 0) {
+            genExprRelatedNode(traverseDimList);
+            constant_count++;
+            fprintf(fout, ".data\n");
+            fprintf(fout, "_CONSTANT_%d: .word %d\n", constant_count, prop->sizeInEachDimension[dimension]);
+            fprintf(fout, ".align 3\n");
+            fprintf(fout, ".text\n");
+            fprintf(fout, "ldr w%d, _CONSTANT_%d\n", temp, constant_count);
+            fprintf(fout, "mul w%d, w%d, w%d\n", dimCount->place, dimCount->place, temp);
+            fprintf(fout, "add w%d, w%d, w%d\n", dimCount->place, dimCount->place, traverseDimList->place);
+            recycle(traverseDimList);
 
-        int temp = get_reg(CALLER);
+            traverseDimList = traverseDimList->rightSibling;
+            dimension++;
+        }
+        reg_stack_caller[caller_top++] = temp;
+
         if(entry->nestingLevel == 0) {
             fprintf(fout, "ldr x%d, =_g_%s\n", idNode->place, entry->name);
         }else {
             fprintf(fout, "add x%d, x29, #%d\n", idNode->place, entry->offset);
         }
-        fprintf(fout, "ldr w%d, =4\n", temp);
-        fprintf(fout, "mul w%d, w%d, w%d\n", traverseDimList->place, traverseDimList->place, temp);
-        fprintf(fout, "add x%d, x%d, w%d, UXTW\n", idNode->place, idNode->place, traverseDimList->place);
-        reg_stack_caller[caller_top++] = temp;
+        fprintf(fout, "lsl w%d, w%d, 2\n", dimCount->place, dimCount->place);
+        fprintf(fout, "add x%d, x%d, w%d, UXTW\n", idNode->place, idNode->place, dimCount->place);
 
-        recycle(traverseDimList);
+        recycle(dimCount);
     }
 }
 
@@ -731,9 +749,14 @@ void genFunction(AST_NODE* declNode) {
     AST_NODE* paramList = funcNode->rightSibling;
     AST_NODE* blockNode = paramList->rightSibling;
     char* funcName = funcNode->semantic_value.identifierSemanticValue.identifierName;
+    SymbolTableEntry* entry = funcNode->semantic_value.identifierSemanticValue.symbolTableEntry;
+    int i, pcount = entry->attribute->attr.functionSignature->parametersCount;
 
     gen_head(funcName);
     gen_prologue(funcName);
+    for(i=0; i<pcount; i++) {
+        fprintf(fout, "str w%d, [sp, #-%d]\n", i, i*4+4);
+    }
     genBlockNode(blockNode);
     gen_epilogue(funcName, /*size*/172 );
 }
@@ -749,6 +772,7 @@ void genBlockNode(AST_NODE* blockNode) {
 void genFunctionCall(AST_NODE* functionCallNode)
 {
     AST_NODE* functionIDNode = functionCallNode->child;
+    int pcount = 0, i;
     if(functionCallNode->place == 0) functionCallNode->place = get_reg(CALLEE);
 
     //special case
@@ -771,21 +795,33 @@ void genFunctionCall(AST_NODE* functionCallNode)
         fprintf(fout, "bl _read_float\n");
         fprintf(fout, "fmov s%d, s0\n", functionCallNode->place-32);
 //        recycle(functionCallNode);
-// remove comment cause  ERROR
+// remove comment cause ERROR
         return;
     }
     /* save registers TODO */
 
     AST_NODE* actualParameterList = functionIDNode->rightSibling;
+    AST_NODE* actualParameter = actualParameterList->child;
     /* parameter */
-    processGeneralNode(actualParameterList);
+    genGeneralNode(actualParameterList);
+    while(actualParameter) {
+        genExprRelatedNode(actualParameter);
+        actualParameter = actualParameter->rightSibling;
+        pcount++;
+    }
 
     /* return */
+    fprintf(fout, "add sp, sp, #-%d\n", pcount*4);
+    actualParameter = actualParameterList->child;
+    for(i=0; i<pcount; i++) {
+        if(i == 8) break;
+        fprintf(fout, "mov w%d, w%d\n", i, actualParameter->place);
+        actualParameter = actualParameter->rightSibling;
+    }
     fprintf(fout, "bl _start_%s\n", functionIDNode->semantic_value.identifierSemanticValue.identifierName);
     fprintf(fout, "mov w%d, w0\n", functionCallNode->place);
+    fprintf(fout, "add sp, sp, #%d\n", pcount*4);
     //    recycle(functionCallNode);
-
-    AST_NODE* actualParameter = actualParameterList->child;
 
     functionCallNode->dataType;
 }
