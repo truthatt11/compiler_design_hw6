@@ -1,10 +1,10 @@
 .text
-_start_func:
+_start_is_prime:
 str x30, [sp, #0]
 str x29, [sp, #-8]
 add x29, sp, #-8
 add sp, sp, #-16
-ldr x30, =_frameSize_func
+ldr x30, =_frameSize_is_prime
 ldr x30, [x30, #0]
 sub sp, sp, w30
 str x9, [sp, #8]
@@ -33,63 +33,133 @@ str s21, [sp, #164]
 str s22, [sp, #168]
 str s23, [sp, #172]
 str w0, [x29, #-4]
-str w1, [x29, #-8]
-ldr w9, [x29, #-4]
-mov w0, w9
-bl _write_int
-.data
-_CONSTANT_1: .ascii "\n\000"
-.align 3
-.text
-ldr x20, =_CONSTANT_1
-mov x0, x20
-bl _write_str
-ldr w9, [x29, #-8]
-mov w0, w9
-bl _write_int
-.data
-_CONSTANT_2: .ascii "\n\000"
-.align 3
-.text
-ldr x20, =_CONSTANT_2
-mov x0, x20
-bl _write_str
 ldr w10, [x29, #-4]
 .data
-_CONSTANT_3: .word 1
+_CONSTANT_1: .word 2
+.align 3
+.text
+ldr w19, _CONSTANT_1
+cmp w10, w19
+cset w9, eq
+cmp w9, #0
+beq Lelse1
+.data
+_CONSTANT_2: .word 1
+.align 3
+.text
+ldr w19, _CONSTANT_2
+mov w0, w19
+b _end_is_prime
+b Lexit1
+Lelse1:
+Lexit1:
+ldr w12, [x29, #-4]
+.data
+_CONSTANT_3: .word 2
 .align 3
 .text
 ldr w19, _CONSTANT_3
-cmp w10, w19
-cset w9, gt
-cmp w9, #0
-beq Lelse1
-ldr w11, [x29, #-4]
-ldr w12, [x29, #-8]
-mul w10, w11, w12
+sdiv w11, w12, w19
 .data
-_CONSTANT_4: .word 3
+_CONSTANT_4: .word 2
 .align 3
 .text
 ldr w19, _CONSTANT_4
-sub w9, w10, w19
-mov w0, w9
-b _end_func
-b Lexit1
-Lelse1:
-ldr w10, [x29, #-4]
-ldr w11, [x29, #-8]
+mul w10, w11, w19
 .data
-_CONSTANT_5: .word 3
+_CONSTANT_5: .word 0
 .align 3
 .text
 ldr w19, _CONSTANT_5
-sub w12, w11, w19
-mul w9, w10, w12
-mov w0, w9
-b _end_func
-Lexit1:
-_end_func:
+cmp w10, w19
+cset w9, eq
+cmp w9, #0
+beq Lelse2
+.data
+_CONSTANT_6: .word 0
+.align 3
+.text
+ldr w19, _CONSTANT_6
+mov w0, w19
+b _end_is_prime
+b Lexit2
+Lelse2:
+Lexit2:
+ldr w9, [x29, #-12]
+ldr w11, [x29, #-4]
+.data
+_CONSTANT_7: .word 2
+.align 3
+.text
+ldr w19, _CONSTANT_7
+sdiv w10, w11, w19
+mov w9, w10
+str w9, [x29, #-12]
+ldr w10, [x29, #-8]
+.data
+_CONSTANT_8: .word 3
+.align 3
+.text
+ldr w9, _CONSTANT_8
+mov w10, w9
+str w10, [x29, #-8]
+_forChkLabel_3:
+ldr w10, [x29, #-8]
+ldr w11, [x29, #-12]
+cmp w10, w11
+cset w9, le
+cmp w9, #0
+beq _forExitLabel_3
+b _forBodyLabel_3
+_forIncrLabel_3:
+ldr w9, [x29, #-8]
+ldr w10, [x29, #-8]
+.data
+_CONSTANT_9: .word 2
+.align 3
+.text
+ldr w19, _CONSTANT_9
+add w11, w10, w19
+mov w9, w11
+str w9, [x29, #-8]
+b _forChkLabel_3
+_forBodyLabel_3:
+ldr w10, [x29, #-4]
+ldr w14, [x29, #-4]
+ldr w15, [x29, #-8]
+sdiv w13, w14, w15
+ldr w15, [x29, #-8]
+mul w12, w13, w15
+sub w9, w10, w12
+.data
+_CONSTANT_10: .word 0
+.align 3
+.text
+ldr w19, _CONSTANT_10
+cmp w9, w19
+cset w11, eq
+cmp w11, #0
+beq Lelse4
+.data
+_CONSTANT_11: .word 0
+.align 3
+.text
+ldr w19, _CONSTANT_11
+mov w0, w19
+b _end_is_prime
+b Lexit4
+Lelse4:
+Lexit4:
+b _forIncrLabel_3
+_forExitLabel_3:
+.data
+_CONSTANT_12: .word 1
+.align 3
+.text
+ldr w19, _CONSTANT_12
+mov w0, w19
+b _end_is_prime
+_end_is_prime:
 ldr x9, [sp, #8]
 ldr x10, [sp, #16]
 ldr x11, [sp, #24]
@@ -120,7 +190,7 @@ add sp, x29, #8
 ldr x29, [x29, #0]
 RET x30
 .data
-_frameSize_func: .word 180
+_frameSize_is_prime: .word 184
 
 .text
 _start_MAIN:
@@ -157,52 +227,77 @@ str s21, [sp, #164]
 str s22, [sp, #168]
 str s23, [sp, #172]
 .data
-_CONSTANT_6: .word 1
+_CONSTANT_13: .ascii "enter a range, for example, 5<ENTER> 23<ENTER>:\000"
 .align 3
 .text
-ldr w9, _CONSTANT_6
-str w9, [x29, #-4]
-.data
-_CONSTANT_7: .word 2
-.align 3
-.text
-ldr w9, _CONSTANT_7
-str w9, [x29, #-8]
+ldr x20, =_CONSTANT_13
+mov x0, x20
+bl _write_str
+ldr w11, [x29, #-8]
+bl _read_int
+mov w9, w0
+mov w11, w9
+str w11, [x29, #-8]
 ldr w9, [x29, #-12]
-ldr w10, [x29, #-4]
-ldr w11, [x29, #-8]
-ldr w10, [x29, #-4]
-ldr w11, [x29, #-8]
-add sp, sp, #-8
-mov w0, w10
-mov w1, w11
-bl _start_func
-mov w19, w0
-add sp, sp, #8
+bl _read_int
+mov w11, w0
+mov w9, w11
+str w9, [x29, #-12]
+ldr w11, [x29, #-4]
+ldr w9, [x29, #-8]
+mov w11, w9
+str w11, [x29, #-4]
+_forChkLabel_5:
+ldr w11, [x29, #-4]
+ldr w12, [x29, #-12]
+cmp w11, w12
+cset w9, lt
+cmp w9, #0
+beq _forExitLabel_5
+b _forBodyLabel_5
+_forIncrLabel_5:
+ldr w9, [x29, #-4]
+ldr w11, [x29, #-4]
 .data
-_CONSTANT_8: .word 3
+_CONSTANT_14: .word 1
 .align 3
 .text
-ldr w20, _CONSTANT_8
-sub w12, w19, w20
+ldr w19, _CONSTANT_14
+add w12, w11, w19
 mov w9, w12
-str w9, [x29, #-12]
-ldr w12, [x29, #-12]
+str w9, [x29, #-4]
+b _forChkLabel_5
+_forBodyLabel_5:
+ldr w9, [x29, #-4]
+ldr w9, [x29, #-4]
+add sp, sp, #-4
+mov w0, w9
+bl _start_is_prime
+mov w12, w0
+add sp, sp, #4
+cmp w12, #0
+beq Lelse6
+ldr w12, [x29, #-4]
 mov w0, w12
 bl _write_int
 .data
-_CONSTANT_9: .ascii "\n\000"
+_CONSTANT_15: .ascii "\n\000"
 .align 3
 .text
-ldr x19, =_CONSTANT_9
-mov x0, x19
+ldr x20, =_CONSTANT_15
+mov x0, x20
 bl _write_str
+b Lexit6
+Lelse6:
+Lexit6:
+b _forIncrLabel_5
+_forExitLabel_5:
 .data
-_CONSTANT_10: .word 0
+_CONSTANT_16: .word 0
 .align 3
 .text
-ldr w20, _CONSTANT_10
-mov w0, w20
+ldr w19, _CONSTANT_16
+mov w0, w19
 b _end_MAIN
 _end_MAIN:
 ldr x9, [sp, #8]

@@ -11,21 +11,22 @@ void codegen(AST_NODE*);
 void genAssignmentStmt(AST_NODE*);
 void genAssignOrExpr(AST_NODE*);
 void genBlockNode(AST_NODE*);
-void genConstValueNode(AST_NODE*);
 void genDeclarationNode(AST_NODE*);
-void genExprRelatedNode(AST_NODE*);
-void genExprNode(AST_NODE*);
 void genForStmt(AST_NODE*);
 void genFunction(AST_NODE*);
-void genFunctionCall(AST_NODE*);
 void genGeneralNode(AST_NODE*);
 void genIdList(AST_NODE*);
 void genIfStmt(AST_NODE*);
 void genReturnStmt(AST_NODE*);
 void genStmtNode(AST_NODE*);
-void genVariableValue(AST_NODE*);
 void genWhileStmt(AST_NODE*);
 void genWriteFunction(AST_NODE*);
+
+void genConstValueNode(AST_NODE*);
+void genExprRelatedNode(AST_NODE*);
+void genExprNode(AST_NODE*);
+void genFunctionCall(AST_NODE*);
+void genVariableValue(AST_NODE*);
 
 typedef enum REGISTER_TYPE{
     CALLER,
@@ -45,6 +46,7 @@ int deepestARoffset;
 int reg_number;
 int nest_num = 0;
 int global_first = 1;
+int shortCircuitCount = 0;
 int constant_count = 0;
 int reg_stack_callee[10];
 int reg_stack_caller[7];
@@ -354,6 +356,7 @@ void genExprNode(AST_NODE* exprNode) {
     {
         AST_NODE* leftOp = exprNode->child;
         AST_NODE* rightOp = leftOp->rightSibling;
+        int scount;
 
         if(leftOp->dataType == INT_TYPE && rightOp->dataType == INT_TYPE)
         {
@@ -363,51 +366,76 @@ void genExprNode(AST_NODE* exprNode) {
                getExprOrConstValue(rightOp, &rightValue, NULL);
              */
             genExprRelatedNode(leftOp);
-            genExprRelatedNode(rightOp);
             exprNode->dataType = INT_TYPE;
             switch(exprNode->semantic_value.exprSemanticValue.op.binaryOp)
             {
                 case BINARY_OP_ADD:
+                    genExprRelatedNode(rightOp);
                     fprintf(fout, "add w%d, w%d, w%d\n", exprNode->place, leftOp->place, rightOp->place);
                     break;
                 case BINARY_OP_SUB:
+                    genExprRelatedNode(rightOp);
                     fprintf(fout, "sub w%d, w%d, w%d\n", exprNode->place, leftOp->place, rightOp->place);
                     break;
                 case BINARY_OP_MUL:
+                    genExprRelatedNode(rightOp);
                     fprintf(fout, "mul w%d, w%d, w%d\n", exprNode->place, leftOp->place, rightOp->place);
                     break;
                 case BINARY_OP_DIV:
+                    genExprRelatedNode(rightOp);
                     fprintf(fout, "sdiv w%d, w%d, w%d\n", exprNode->place, leftOp->place, rightOp->place);
                     break;
                 case BINARY_OP_EQ:
+                    genExprRelatedNode(rightOp);
                     fprintf(fout, "cmp w%d, w%d\n", leftOp->place, rightOp->place);
                     fprintf(fout, "cset w%d, eq\n", exprNode->place);
                     break;
                 case BINARY_OP_GE:
+                    genExprRelatedNode(rightOp);
                     fprintf(fout, "cmp w%d, w%d\n", leftOp->place, rightOp->place);
                     fprintf(fout, "cset w%d, ge\n", exprNode->place);
                     break;
                 case BINARY_OP_LE:
+                    genExprRelatedNode(rightOp);
                     fprintf(fout, "cmp w%d, w%d\n", leftOp->place, rightOp->place);
                     fprintf(fout, "cset w%d, le\n", exprNode->place);
                     break;
                 case BINARY_OP_NE:
+                    genExprRelatedNode(rightOp);
                     fprintf(fout, "cmp w%d, w%d\n", leftOp->place, rightOp->place);
                     fprintf(fout, "cset w%d, ne\n", exprNode->place);
                     break;
                 case BINARY_OP_GT:
+                    genExprRelatedNode(rightOp);
                     fprintf(fout, "cmp w%d, w%d\n", leftOp->place, rightOp->place);
                     fprintf(fout, "cset w%d, gt\n", exprNode->place);
                     break;
                 case BINARY_OP_LT:
+                    genExprRelatedNode(rightOp);
                     fprintf(fout, "cmp w%d, w%d\n", leftOp->place, rightOp->place);
                     fprintf(fout, "cset w%d, lt\n", exprNode->place);
                     break;
                 case BINARY_OP_AND:
-                    fprintf(fout, "and w%d, w%d, w%d\n", exprNode->place, leftOp->place, rightOp->place);
+                    scount = shortCircuitCount;
+                    shortCircuitCount++;
+                    fprintf(fout, "cmp w%d, #0\n", leftOp->place);
+                    fprintf(fout, "cset w%d, ne\n", exprNode->place);
+                    fprintf(fout, "beq _shortCircuit_%d\n", scount);
+                    genExprRelatedNode(rightOp);
+                    fprintf(fout, "cmp w%d, #0\n", rightOp->place);
+                    fprintf(fout, "cset w%d, ne\n", exprNode->place);
+                    fprintf(fout, "_shortCircuit_%d:\n", scount);
                     break;
                 case BINARY_OP_OR:
-                    fprintf(fout, "orr w%d, w%d, w%d\n", exprNode->place, leftOp->place, rightOp->place);
+                    scount = shortCircuitCount;
+                    shortCircuitCount++;
+                    fprintf(fout, "cmp w%d, #0\n", leftOp->place);
+                    fprintf(fout, "cset w%d, ne\n", exprNode->place);
+                    fprintf(fout, "bne _shortCircuit_%d\n", scount);
+                    genExprRelatedNode(rightOp);
+                    fprintf(fout, "cmp w%d, #0\n", rightOp->place);
+                    fprintf(fout, "cset w%d, ne\n", exprNode->place);
+                    fprintf(fout, "_shortCircuit_%d:\n", scount);
                     break;
                 default:
                     break;
@@ -505,13 +533,31 @@ void genExprNode(AST_NODE* exprNode) {
                     recycle(exprNode);
                     exprNode->place = get_reg(CALLEE);
                     exprNode->dataType = INT_TYPE;
-                    fprintf(fout, "and w%d, s%d, s%d\n", exprNode->place, leftOp->place-32, rightOp->place-32);
+
+                    scount = shortCircuitCount;
+                    shortCircuitCount++;
+                    fprintf(fout, "cmp w%d, #0\n", leftOp->place);
+                    fprintf(fout, "cset w%d, ne\n", exprNode->place);
+                    fprintf(fout, "beq _shortCircuit_%d\n", scount);
+                    genExprRelatedNode(rightOp);
+                    fprintf(fout, "cmp w%d, #0\n", rightOp->place);
+                    fprintf(fout, "cset w%d, ne\n", exprNode->place);
+                    fprintf(fout, "_shortCircuit_%d:\n", scount);
                     break;
                 case BINARY_OP_OR:
                     recycle(exprNode);
                     exprNode->place = get_reg(CALLEE);
                     exprNode->dataType = INT_TYPE;
-                    fprintf(fout, "orr w%d, s%d, s%d\n", exprNode->place, leftOp->place-32, rightOp->place-32);
+
+                    scount = shortCircuitCount;
+                    shortCircuitCount++;
+                    fprintf(fout, "cmp w%d, #0\n", leftOp->place);
+                    fprintf(fout, "cset w%d, ne\n", exprNode->place);
+                    fprintf(fout, "bne _shortCircuit_%d\n", scount);
+                    genExprRelatedNode(rightOp);
+                    fprintf(fout, "cmp w%d, #0\n", rightOp->place);
+                    fprintf(fout, "cset w%d, ne\n", exprNode->place);
+                    fprintf(fout, "_shortCircuit_%d:\n", scount);
                     break;
                 default:
                     break;
