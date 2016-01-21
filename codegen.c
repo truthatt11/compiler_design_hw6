@@ -457,13 +457,13 @@ void genExprNode(AST_NODE* exprNode) {
             exprNode->dataType = FLOAT_TYPE;
             if(leftOp->place < 32) {
                 int temp = get_reg(FLOAT);
-                fprintf(fout, "scvtf s%d, w%d, #6\n", temp-32, leftOp->place);
+                fprintf(fout, "scvtf s%d, w%d\n", temp-32, leftOp->place);
                 recycle(leftOp);
                 leftOp->place = temp;
             }
             if(rightOp->place < 32) {
                 int temp = get_reg(FLOAT);
-                fprintf(fout, "scvtf s%d, w%d, #6\n", temp-32, rightOp->place);
+                fprintf(fout, "scvtf s%d, w%d\n", temp-32, rightOp->place);
                 recycle(rightOp);
                 rightOp->place = temp;
             }
@@ -688,19 +688,25 @@ void genAssignmentStmt(AST_NODE* assignmentNode)
     AST_NODE* rightOp = leftOp->rightSibling;
     SymbolTableEntry* entry = leftOp->semantic_value.identifierSemanticValue.symbolTableEntry;
 
-    genVariableValue(leftOp);
     //    rightOp->place = leftOp->place;
     if(rightOp->place == 0) {
-        if(leftOp->dataType == INT_TYPE) rightOp->place = get_reg(CALLER);
-        if(leftOp->dataType == FLOAT_TYPE) rightOp->place = get_reg(FLOAT);
+        if(rightOp->dataType == INT_TYPE) rightOp->place = get_reg(CALLER);
+        if(rightOp->dataType == FLOAT_TYPE) rightOp->place = get_reg(FLOAT);
     }
     genExprRelatedNode(rightOp);
+    genVariableValue(leftOp);
 
     if(entry->nestingLevel > 0) {
         if(entry->attribute->attr.typeDescriptor->kind == SCALAR_TYPE_DESCRIPTOR) {
             if(leftOp->place != rightOp->place) {
-                if(leftOp->dataType == INT_TYPE) fprintf(fout, "mov w%d, w%d\n", leftOp->place, rightOp->place);
-                if(leftOp->dataType == FLOAT_TYPE) fprintf(fout, "fmov s%d, s%d\n", leftOp->place-32, rightOp->place-32);
+                if(leftOp->dataType == INT_TYPE) {
+                    if(rightOp->dataType == INT_TYPE) fprintf(fout, "mov w%d, w%d\n", leftOp->place, rightOp->place);
+                    else fprintf(fout, "fcvtzs w%d, s%d\n", leftOp->place, rightOp->place-32);
+                }
+                if(leftOp->dataType == FLOAT_TYPE) {
+                    if(rightOp->dataType == FLOAT_TYPE) fprintf(fout, "fmov s%d, s%d\n", leftOp->place-32, rightOp->place-32);
+                    else fprintf(fout, "scvtf s%d, w%d\n", leftOp->place-32, rightOp->place);
+                }
             }
             if(leftOp->dataType == INT_TYPE) fprintf(fout, "str w%d, [x29, #%d]\n", leftOp->place, entry->offset);
             if(leftOp->dataType == FLOAT_TYPE) fprintf(fout, "str s%d, [x29, #%d]\n", leftOp->place-32, entry->offset);
@@ -735,7 +741,7 @@ void genVariableValue(AST_NODE* idNode)
     {
         /* global and local */
         if(idNode->place == 0) {
-            if(idNode->dataType == INT_TYPE) idNode->place = get_reg(CALLER);
+            if(idNode->dataType == INT_TYPE) idNode->place = get_reg(CALLEE);
             if(idNode->dataType == FLOAT_TYPE) idNode->place = get_reg(FLOAT);
         }
 
@@ -797,12 +803,19 @@ void genFunction(AST_NODE* declNode) {
     AST_NODE* blockNode = paramList->rightSibling;
     char* funcName = funcNode->semantic_value.identifierSemanticValue.identifierName;
     SymbolTableEntry* entry = funcNode->semantic_value.identifierSemanticValue.symbolTableEntry;
+    Parameter* pnow = entry->attribute->attr.functionSignature->parameterList;
     int i, pcount = entry->attribute->attr.functionSignature->parametersCount;
 
     gen_head(funcName);
     gen_prologue(funcName);
     for(i=0; i<pcount; i++) {
-        fprintf(fout, "str w%d, [x29, #-%d]\n", i, i*4+4);
+        DATA_TYPE temp;
+        if(pnow->type->kind == SCALAR_TYPE_DESCRIPTOR)
+            temp = pnow->type->properties.dataType;
+        else temp = pnow->type->properties.arrayProperties.elementType;
+
+        if(temp == INT_TYPE) fprintf(fout, "str w%d, [x29, #-%d]\n", i, i*4+4);
+        if(temp == FLOAT_TYPE) fprintf(fout, "str s%d, [x29, #-%d]\n", i, i*4+4);
     }
     genBlockNode(blockNode);
     gen_epilogue(funcName, /*size*/172 - entry->offset );
@@ -850,7 +863,7 @@ void genFunctionCall(AST_NODE* functionCallNode)
     AST_NODE* actualParameterList = functionIDNode->rightSibling;
     AST_NODE* actualParameter = actualParameterList->child;
     /* parameter */
-    genGeneralNode(actualParameterList);
+//    genGeneralNode(actualParameterList);
     while(actualParameter) {
         genExprRelatedNode(actualParameter);
         actualParameter = actualParameter->rightSibling;
@@ -862,7 +875,8 @@ void genFunctionCall(AST_NODE* functionCallNode)
     actualParameter = actualParameterList->child;
     for(i=0; i<pcount; i++) {
         if(i == 8) break;
-        fprintf(fout, "mov w%d, w%d\n", i, actualParameter->place);
+        if(actualParameter->dataType == INT_TYPE) fprintf(fout, "mov w%d, w%d\n", i, actualParameter->place);
+        if(actualParameter->dataType == FLOAT_TYPE) fprintf(fout, "fmov s%d, s%d\n", i, actualParameter->place-32);
         actualParameter = actualParameter->rightSibling;
     }
     fprintf(fout, "bl _start_%s\n", functionIDNode->semantic_value.identifierSemanticValue.identifierName);
@@ -916,7 +930,6 @@ void genWriteFunction(AST_NODE* functionCallNode)
 
 void genExprRelatedNode(AST_NODE* exprRelatedNode)
 {
-    //    exprRelatedNode->place = get_reg(CALLER);
     switch(exprRelatedNode->nodeType)
     {
         case EXPR_NODE:
